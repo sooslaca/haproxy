@@ -37,7 +37,7 @@ haproxy h2 -arg "-L B" -conf {
     peers peers
         table stkt type string size 10m store server_id,gpc0,conn_cur,conn_rate(50000)
         default-server ssl crt ${testdir}/common.pem verify none
-        bind "fd@${B}" ssl crt ${testdir}/common.pem
+        bind "fd@${B}" allow-0rtt ssl crt ${testdir}/common.pem
         server A ${h1_A_addr}:${h1_A_port}
         server B
         server C ${h3_C_addr}:${h3_C_port}
