@@ -1,0 +1,28 @@
+
+name: compliance
+
+on: [push]
+
+jobs:
+  websocket:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: build haproxy
+      run: |
+        make -j3 CC=gcc ERR=1 TARGET=linux-glibc USE_OPENSSL=1
+    - name: download websocat
+      run: |
+        wget https://github.com/vi/websocat/releases/download/v1.6.0/websocat_amd64-linux
+        chmod +x websocat_amd64-linux
+
+    - name: start haproxy
+      run: |
+        ./haproxy -f .github/ws.config -D
+    - name: run websocat
+      run: |
+        ./websocat_amd64-linux -v -b literal:qwe ws://127.0.0.1:8080
+        ./websocat_amd64-linux -v -b literal:qwe -u ws://127.0.0.1:8080
+        ./websocat_amd64-linux -v -b literal:qwe -1uU ws://127.0.0.1:8080
