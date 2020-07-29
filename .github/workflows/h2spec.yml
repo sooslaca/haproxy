@@ -1,9 +1,7 @@
 
 name: compliance
 
-on:
-  schedule:
-    - cron: "0 0 * * 3"
+on: [ push ]
 
 jobs:
   h2spec:
@@ -15,6 +13,9 @@ jobs:
     - name: build haproxy
       run: |
         make -j3 CC=gcc ERR=1 TARGET=linux-glibc USE_OPENSSL=1
+    - name: version
+      run: |
+        ./haproxy -vv
     - name: start haproxy
       run: |
         ./haproxy -f .github/h2spec.config -D
