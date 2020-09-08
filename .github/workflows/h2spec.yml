@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v2
     - name: prerequisuites 
       run: |
         sudo apt-get update -y
@@ -19,7 +19,7 @@ jobs:
         make -j3 CC=gcc DEBUG_CFLAGS="-g -fsanitize=address" LDFLAGS="-fsanitize=address -lasan" ERR=1 TARGET=linux-glibc USE_OPENSSL=1
     - name: start haproxy
       run: |
-        export ASAN_OPTIONS="log_path=asan.log
+        export ASAN_OPTIONS="log_path=asan.log"
         ./haproxy -f .github/h2spec.config -D
     - name: download h2spec
       run: |
