@@ -44,8 +44,6 @@ static struct bind_kw_list bind_keywords = {
 	.list = LIST_HEAD_INIT(bind_keywords.list)
 };
 
-struct xfer_sock_list *xfer_sock_list = NULL;
-
 /* there is one listener queue per thread so that a thread unblocking the
  * global queue can wake up listeners bound only to foreign threads by
  * moving them to the remote queues and waking up the associated tasklet.
@@ -532,22 +530,6 @@ void unbind_listener_no_close(struct listener *listener)
 	HA_SPIN_LOCK(LISTENER_LOCK, &listener->lock);
 	do_unbind_listener(listener, 0);
 	HA_SPIN_UNLOCK(LISTENER_LOCK, &listener->lock);
-}
-
-/* This function closes all listening sockets bound to the protocol <proto>,
- * and the listeners end in LI_ASSIGNED state if they were higher. It does not
- * detach them from the protocol. It always returns ERR_NONE.
- *
- * Must be called with proto_lock held.
- *
- */
-int unbind_all_listeners(struct protocol *proto)
-{
-	struct listener *listener;
-
-	list_for_each_entry(listener, &proto->listeners, proto_list)
-		unbind_listener(listener);
-	return ERR_NONE;
 }
 
 /* creates one or multiple listeners for bind_conf <bc> on sockaddr <ss> on port

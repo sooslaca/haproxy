@@ -13,8 +13,6 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <pwd.h>
-#include <grp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,19 +33,17 @@
 #include <haproxy/listener.h>
 #include <haproxy/log.h>
 #include <haproxy/protocol.h>
+#include <haproxy/sock.h>
+#include <haproxy/sock_unix.h>
 #include <haproxy/time.h>
 #include <haproxy/tools.h>
 #include <haproxy/version.h>
 
 
 static int uxst_bind_listener(struct listener *listener, char *errmsg, int errlen);
-static int uxst_bind_listeners(struct protocol *proto, char *errmsg, int errlen);
-static int uxst_unbind_listeners(struct protocol *proto);
 static int uxst_connect_server(struct connection *conn, int flags);
 static void uxst_add_listener(struct listener *listener, int port);
 static int uxst_pause_listener(struct listener *l);
-static int uxst_get_src(int fd, struct sockaddr *sa, socklen_t salen, int dir);
-static int uxst_get_dst(int fd, struct sockaddr *sa, socklen_t salen, int dir);
 
 /* Note: must not be declared <const> as its list will be overwritten */
 static struct protocol proto_unix = {
@@ -61,14 +57,13 @@ static struct protocol proto_unix = {
 	.accept = &listener_accept,
 	.connect = &uxst_connect_server,
 	.bind = uxst_bind_listener,
-	.bind_all = uxst_bind_listeners,
-	.unbind_all = uxst_unbind_listeners,
 	.enable_all = enable_all_listeners,
 	.disable_all = disable_all_listeners,
-	.get_src = uxst_get_src,
-	.get_dst = uxst_get_dst,
+	.get_src = sock_get_src,
+	.get_dst = sock_get_dst,
 	.pause = uxst_pause_listener,
 	.add = uxst_add_listener,
+	.addrcmp = sock_unix_addrcmp,
 	.listeners = LIST_HEAD_INIT(proto_unix.listeners),
 	.nb_listeners = 0,
 };
@@ -79,93 +74,10 @@ INITCALL1(STG_REGISTER, protocol_register, &proto_unix);
  * 1) low-level socket functions
  ********************************/
 
-/*
- * Retrieves the source address for the socket <fd>, with <dir> indicating
- * if we're a listener (=0) or an initiator (!=0). It returns 0 in case of
- * success, -1 in case of error. The socket's source address is stored in
- * <sa> for <salen> bytes.
- */
-static int uxst_get_src(int fd, struct sockaddr *sa, socklen_t salen, int dir)
-{
-	if (dir)
-		return getsockname(fd, sa, &salen);
-	else
-		return getpeername(fd, sa, &salen);
-}
-
-
-/*
- * Retrieves the original destination address for the socket <fd>, with <dir>
- * indicating if we're a listener (=0) or an initiator (!=0). It returns 0 in
- * case of success, -1 in case of error. The socket's source address is stored
- * in <sa> for <salen> bytes.
- */
-static int uxst_get_dst(int fd, struct sockaddr *sa, socklen_t salen, int dir)
-{
-	if (dir)
-		return getpeername(fd, sa, &salen);
-	else
-		return getsockname(fd, sa, &salen);
-}
-
 
 /********************************
  * 2) listener-oriented functions
  ********************************/
-
-
-static int uxst_find_compatible_fd(struct listener *l)
-{
-	struct xfer_sock_list *xfer_sock = xfer_sock_list;
-	int ret = -1;
-
-	while (xfer_sock) {
-		struct sockaddr_un *un1 = (void *)&l->addr;
-		struct sockaddr_un *un2 = (void *)&xfer_sock->addr;
-
-		/*
-		 * The bound socket's path as returned by getsockaddr
-		 * will be the temporary name <sockname>.XXXXX.tmp,
-		 * so we can't just compare the two names
-		 */
-		if (xfer_sock->addr.ss_family == AF_UNIX &&
-		    strncmp(un1->sun_path, un2->sun_path,
-		    strlen(un1->sun_path)) == 0) {
-			char *after_sockname = un2->sun_path +
-			    strlen(un1->sun_path);
-			/* Make a reasonable effort to check that
-			 * it is indeed a haproxy-generated temporary
-			 * name, it's not perfect, but probably good enough.
-			 */
-			if (after_sockname[0] == '.') {
-				after_sockname++;
-				while (after_sockname[0] >= '0' &&
-				    after_sockname[0] <= '9')
-					after_sockname++;
-				if (!strcmp(after_sockname, ".tmp"))
-					break;
-			/* abns sockets sun_path starts with a \0 */
-			} else if (un1->sun_path[0] == 0
-			    && un2->sun_path[0] == 0
-			    && !memcmp(&un1->sun_path[1], &un2->sun_path[1],
-			    sizeof(un1->sun_path) - 1))
-				break;
-		}
-		xfer_sock = xfer_sock->next;
-	}
-	if (xfer_sock != NULL) {
-		ret = xfer_sock->fd;
-		if (xfer_sock == xfer_sock_list)
-			xfer_sock_list = xfer_sock->next;
-		if (xfer_sock->prev)
-			xfer_sock->prev->next = xfer_sock->next;
-		if (xfer_sock->next)
-			xfer_sock->next->prev = xfer_sock->prev;
-		free(xfer_sock);
-	}
-	return ret;
-
-}
 
 /* This function creates a UNIX socket associated to the listener. It changes
  * the state from ASSIGNED to LISTEN. The socket is NOT enabled for polling.
@@ -198,7 +110,8 @@ static int uxst_bind_listener(struct listener *listener, char *errmsg, int errle
 		return ERR_NONE; /* already bound */
 		
 	if (listener->fd == -1)
-		listener->fd = uxst_find_compatible_fd(listener);
+		listener->fd = sock_find_compatible_fd(listener);
+
 	path = ((struct sockaddr_un *)&listener->addr)->sun_path;
 
 	maxpathlen = MIN(MAXPATHLEN, sizeof(addr.sun_path));
@@ -377,17 +290,6 @@ static int uxst_bind_listener(struct listener *listener, char *errmsg, int errle
 			snprintf(errmsg, errlen, "%s [fd %d]", msg, fd);
 	}
 	return err;
-}
-
-/* This function closes the UNIX sockets for the specified listener.
- * The listener enters the LI_ASSIGNED state. It always returns ERR_NONE.
- */
-static int uxst_unbind_listener(struct listener *listener)
-{
-	if (listener->state > LI_ASSIGNED) {
-		unbind_listener(listener);
-	}
-	return ERR_NONE;
 }
 
 /* Add <listener> to the list of unix stream listeners (port is ignored). The
@@ -603,149 +505,6 @@ static int uxst_connect_server(struct connection *conn, int flags)
 
 	return SF_ERR_NONE;  /* connection is OK */
 }
-
-
-/********************************
- * 3) protocol-oriented functions
- ********************************/
-
-
-/* This function creates all UNIX sockets bound to the protocol entry <proto>.
- * It is intended to be used as the protocol's bind_all() function.
- * The sockets will be registered but not added to any fd_set, in order not to
- * loose them across the fork(). A call to uxst_enable_listeners() is needed
- * to complete initialization.
- *
- * Must be called with proto_lock held.
- *
- * The return value is composed from ERR_NONE, ERR_RETRYABLE and ERR_FATAL.
- */
-static int uxst_bind_listeners(struct protocol *proto, char *errmsg, int errlen)
-{
-	struct listener *listener;
-	int err = ERR_NONE;
-
-	list_for_each_entry(listener, &proto->listeners, proto_list) {
-		err |= uxst_bind_listener(listener, errmsg, errlen);
-		if (err & ERR_ABORT)
-			break;
-	}
-	return err;
-}
-
-
-/* This function stops all listening UNIX sockets bound to the protocol
- * <proto>. It does not detaches them from the protocol.
- * It always returns ERR_NONE.
- *
- * Must be called with proto_lock held.
- *
- */
-static int uxst_unbind_listeners(struct protocol *proto)
-{
-	struct listener *listener;
-
-	list_for_each_entry(listener, &proto->listeners, proto_list)
-		uxst_unbind_listener(listener);
-	return ERR_NONE;
-}
-
-/* parse the "mode" bind keyword */
-static int bind_parse_mode(char **args, int cur_arg, struct proxy *px, struct bind_conf *conf, char **err)
-{
-	char *endptr;
-
-	conf->ux.mode = strtol(args[cur_arg + 1], &endptr, 8);
-
-	if (!*args[cur_arg + 1] || *endptr) {
-		memprintf(err, "'%s' : missing or invalid mode '%s' (octal integer expected)", args[cur_arg], args[cur_arg + 1]);
-		return ERR_ALERT | ERR_FATAL;
-	}
-
-	return 0;
-}
-
-/* parse the "gid" bind keyword */
-static int bind_parse_gid(char **args, int cur_arg, struct proxy *px, struct bind_conf *conf, char **err)
-{
-	if (!*args[cur_arg + 1]) {
-		memprintf(err, "'%s' : missing value", args[cur_arg]);
-		return ERR_ALERT | ERR_FATAL;
-	}
-
-	conf->ux.gid = atol(args[cur_arg + 1]);
-	return 0;
-}
-
-/* parse the "group" bind keyword */
-static int bind_parse_group(char **args, int cur_arg, struct proxy *px, struct bind_conf *conf, char **err)
-{
-	struct group *group;
-
-	if (!*args[cur_arg + 1]) {
-		memprintf(err, "'%s' : missing group name", args[cur_arg]);
-		return ERR_ALERT | ERR_FATAL;
-	}
-
-	group = getgrnam(args[cur_arg + 1]);
-	if (!group) {
-		memprintf(err, "'%s' : unknown group name '%s'", args[cur_arg], args[cur_arg + 1]);
-		return ERR_ALERT | ERR_FATAL;
-	}
-
-	conf->ux.gid = group->gr_gid;
-	return 0;
-}
-
-/* parse the "uid" bind keyword */
-static int bind_parse_uid(char **args, int cur_arg, struct proxy *px, struct bind_conf *conf, char **err)
-{
-	if (!*args[cur_arg + 1]) {
-		memprintf(err, "'%s' : missing value", args[cur_arg]);
-		return ERR_ALERT | ERR_FATAL;
-	}
-
-	conf->ux.uid = atol(args[cur_arg + 1]);
-	return 0;
-}
-
-/* parse the "user" bind keyword */
-static int bind_parse_user(char **args, int cur_arg, struct proxy *px, struct bind_conf *conf, char **err)
-{
-	struct passwd *user;
-
-	if (!*args[cur_arg + 1]) {
-		memprintf(err, "'%s' : missing user name", args[cur_arg]);
-		return ERR_ALERT | ERR_FATAL;
-	}
-
-	user = getpwnam(args[cur_arg + 1]);
-	if (!user) {
-		memprintf(err, "'%s' : unknown user name '%s'", args[cur_arg], args[cur_arg + 1]);
-		return ERR_ALERT | ERR_FATAL;
-	}
-
-	conf->ux.uid = user->pw_uid;
-	return 0;
-}
-
-/* Note: must not be declared <const> as its list will be overwritten.
- * Please take care of keeping this list alphabetically sorted, doing so helps
- * all code contributors.
- * Optional keywords are also declared with a NULL ->parse() function so that
- * the config parser can report an appropriate error when a known keyword was
- * not enabled.
- */
-static struct bind_kw_list bind_kws = { "UNIX", { }, {
-	{ "gid",   bind_parse_gid,   1 },      /* set the socket's gid */
-	{ "group", bind_parse_group, 1 },      /* set the socket's gid from the group name */
-	{ "mode",  bind_parse_mode,  1 },      /* set the socket's mode (eg: 0644)*/
-	{ "uid",   bind_parse_uid,   1 },      /* set the socket's uid */
-	{ "user",  bind_parse_user,  1 },      /* set the socket's uid from the user name */
-	{ NULL, NULL, 0 },
-}};
-
-INITCALL1(STG_REGISTER, bind_register_keywords, &bind_kws);
 
 /*
  * Local variables:

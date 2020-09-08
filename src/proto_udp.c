@@ -36,9 +36,10 @@
 #include <haproxy/proto_udp.h>
 #include <haproxy/proxy.h>
 #include <haproxy/server.h>
+#include <haproxy/sock.h>
+#include <haproxy/sock_inet.h>
 #include <haproxy/task.h>
 
-static int udp_bind_listeners(struct protocol *proto, char *errmsg, int errlen);
 static int udp_bind_listener(struct listener *listener, char *errmsg, int errlen);
 static void udp4_add_listener(struct listener *listener, int port);
 static void udp6_add_listener(struct listener *listener, int port);
@@ -55,13 +56,12 @@ static struct protocol proto_udp4 = {
 	.accept = NULL,
 	.connect = NULL,
 	.bind = udp_bind_listener,
-	.bind_all = udp_bind_listeners,
-	.unbind_all = unbind_all_listeners,
 	.enable_all = enable_all_listeners,
 	.get_src = udp_get_src,
 	.get_dst = udp_get_dst,
 	.pause = udp_pause_listener,
 	.add = udp4_add_listener,
+	.addrcmp = sock_inet4_addrcmp,
 	.listeners = LIST_HEAD_INIT(proto_udp4.listeners),
 	.nb_listeners = 0,
 };
@@ -80,13 +80,12 @@ static struct protocol proto_udp6 = {
 	.accept = NULL,
 	.connect = NULL,
 	.bind = udp_bind_listener,
-	.bind_all = udp_bind_listeners,
-	.unbind_all = unbind_all_listeners,
 	.enable_all = enable_all_listeners,
-	.get_src = udp_get_src,
-	.get_dst = udp_get_dst,
+	.get_src = udp6_get_src,
+	.get_dst = udp6_get_dst,
 	.pause = udp_pause_listener,
 	.add = udp6_add_listener,
+	.addrcmp = sock_inet6_addrcmp,
 	.listeners = LIST_HEAD_INIT(proto_udp6.listeners),
 	.nb_listeners = 0,
 };
@@ -103,21 +102,29 @@ int udp_get_src(int fd, struct sockaddr *sa, socklen_t salen, int dir)
 {
 	int ret;
 
-	if (dir)
-		ret = getsockname(fd, sa, &salen);
-	else
-		ret = getpeername(fd, sa, &salen);
-
-	if (!ret) {
-		if (sa->sa_family == AF_INET)
-			sa->sa_family = AF_CUST_UDP4;
-		else if (sa->sa_family == AF_INET6)
-			sa->sa_family = AF_CUST_UDP6;
-	}
+	ret = sock_get_src(fd, sa, salen, dir);
+	if (!ret)
+		sa->sa_family = AF_CUST_UDP4;
 
 	return ret;
 }
 
+/*
+ * Retrieves the source address for the socket <fd>, with <dir> indicating
+ * if we're a listener (=0) or an initiator (!=0). It returns 0 in case of
+ * success, -1 in case of error. The socket's source address is stored in
+ * <sa> for <salen> bytes.
+ */
+int udp6_get_src(int fd, struct sockaddr *sa, socklen_t salen, int dir)
+{
+	int ret;
+
+	ret = sock_get_src(fd, sa, salen, dir);
+	if (!ret)
+		sa->sa_family = AF_CUST_UDP6;
+
+	return ret;
+}
 
 /*
  * Retrieves the original destination address for the socket <fd>, with <dir>
@@ -130,34 +137,27 @@ int udp_get_dst(int fd, struct sockaddr *sa, socklen_t salen, int dir)
 {
 	int ret;
 
-	if (dir)
-		ret = getpeername(fd, sa, &salen);
-	else {
-		ret = getsockname(fd, sa, &salen);
+	ret = sock_inet_get_dst(fd, sa, salen, dir);
+	if (!ret)
+		sa->sa_family = AF_CUST_UDP4;
 
-		if (ret < 0)
-			return ret;
+	return ret;
+}
 
-#if defined(USE_TPROXY) && defined(SO_ORIGINAL_DST)
-		/* For TPROXY and Netfilter's NAT, we can retrieve the original
-		 * IPv4 address before DNAT/REDIRECT. We must not do that with
-		 * other families because v6-mapped IPv4 addresses are still
-		 * reported as v4.
-		 */
-		if (((struct sockaddr_storage *)sa)->ss_family == AF_INET
-		    && getsockopt(fd, SOL_IP, SO_ORIGINAL_DST, sa, &salen) == 0) {
-			sa->sa_family = AF_CUST_UDP4;
-			return 0;
-		}
-#endif
-	}
+/*
+ * Retrieves the original destination address for the socket <fd>, with <dir>
+ * indicating if we're a listener (=0) or an initiator (!=0). In the case of a
+ * listener, if the original destination address was translated, the original
+ * address is retrieved. It returns 0 in case of success, -1 in case of error.
+ * The socket's source address is stored in <sa> for <salen> bytes.
+ */
+int udp6_get_dst(int fd, struct sockaddr *sa, socklen_t salen, int dir)
+{
+	int ret;
 
-	if (!ret) {
-		if (sa->sa_family == AF_INET)
-			sa->sa_family = AF_CUST_UDP4;
-		else if (sa->sa_family == AF_INET6)
-			sa->sa_family = AF_CUST_UDP6;
-	}
+	ret = sock_get_dst(fd, sa, salen, dir);
+	if (!ret)
+		sa->sa_family = AF_CUST_UDP6;
 
 	return ret;
 }
@@ -236,39 +236,13 @@ int udp_bind_listener(struct listener *listener, char *errmsg, int errlen)
 	if (listener->options & LI_O_FOREIGN) {
 		switch (addr_inet.ss_family) {
 		case AF_INET:
-			if (1
-#if defined(IP_TRANSPARENT)
-			    && (setsockopt(fd, SOL_IP, IP_TRANSPARENT, &one, sizeof(one)) == -1)
-#endif
-#if defined(IP_FREEBIND)
-			    && (setsockopt(fd, SOL_IP, IP_FREEBIND, &one, sizeof(one)) == -1)
-#endif
-#if defined(IP_BINDANY)
-			    && (setsockopt(fd, IPPROTO_IP, IP_BINDANY, &one, sizeof(one)) == -1)
-#endif
-#if defined(SO_BINDANY)
-			    && (setsockopt(fd, SOL_SOCKET, SO_BINDANY, &one, sizeof(one)) == -1)
-#endif
-			    ) {
+			if (!sock_inet4_make_foreign(fd)) {
 				msg = "cannot make listening socket transparent";
 				err |= ERR_ALERT;
 			}
 		break;
 		case AF_INET6:
-			if (1
-#if defined(IPV6_TRANSPARENT) && defined(SOL_IPV6)
-			    && (setsockopt(fd, SOL_IPV6, IPV6_TRANSPARENT, &one, sizeof(one)) == -1)
-#endif
-#if defined(IP_FREEBIND)
-			    && (setsockopt(fd, SOL_IP, IP_FREEBIND, &one, sizeof(one)) == -1)
-#endif
-#if defined(IPV6_BINDANY)
-			    && (setsockopt(fd, IPPROTO_IPV6, IPV6_BINDANY, &one, sizeof(one)) == -1)
-#endif
-#if defined(SO_BINDANY)
-			    && (setsockopt(fd, SOL_SOCKET, SO_BINDANY, &one, sizeof(one)) == -1)
-#endif
-			    ) {
+			if (!sock_inet6_make_foreign(fd)) {
 				msg = "cannot make listening socket transparent";
 				err |= ERR_ALERT;
 			}
@@ -324,26 +298,6 @@ int udp_bind_listener(struct listener *listener, char *errmsg, int errlen)
  udp_close_return:
 	close(fd);
 	goto udp_return;
-}
-
-/* This function creates all UDP sockets bound to the protocol entry <proto>.
- * It is intended to be used as the protocol's bind_all() function.
- * The sockets will be registered but not added to any fd_set, in order not to
- * loose them across the fork(). A call to enable_all_listeners() is needed
- * to complete initialization. The return value is composed from ERR_*.
- */
-static int udp_bind_listeners(struct protocol *proto, char *errmsg, int errlen)
-{
-	struct listener *listener;
-	int err = ERR_NONE;
-
-	list_for_each_entry(listener, &proto->listeners, proto_list) {
-		err |= udp_bind_listener(listener, errmsg, errlen);
-		if (err & ERR_ABORT)
-			break;
-	}
-
-	return err;
 }
 
 /* Add <listener> to the list of udp4 listeners, on port <port>. The

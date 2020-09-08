@@ -1,10 +1,8 @@
 /*
- * include/proto/proto_udp.h
- * This file contains UDP socket protocol definitions.
+ * include/haproxy/sock.h
+ * This file contains declarations for native (BSD-compatible) sockets.
  *
- * Copyright 2019 HAProxy Technologies, Frédéric Lécaille <flecaille@haproxy.com>
- *
- * Partial merge by Emeric Brun <ebrun@haproxy.com>
+ * Copyright (C) 2000-2020 Willy Tarreau - w@1wt.eu
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,17 +19,26 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#ifndef _PROTO_PROTO_UDP_H
-#define _PROTO_PROTO_UDP_H
+#ifndef _HAPROXY_SOCK_H
+#define _HAPROXY_SOCK_H
 
-int udp_bind_socket(int fd, int flags, struct sockaddr_storage *local, struct sockaddr_storage *remote);
-int udp_pause_listener(struct listener *l);
-int udp_get_src(int fd, struct sockaddr *sa, socklen_t salen, int dir);
-int udp6_get_src(int fd, struct sockaddr *sa, socklen_t salen, int dir);
-int udp_get_dst(int fd, struct sockaddr *sa, socklen_t salen, int dir);
-int udp6_get_dst(int fd, struct sockaddr *sa, socklen_t salen, int dir);
+#include <sys/socket.h>
+#include <sys/types.h>
 
-#endif /* _PROTO_PROTO_UDP_H */
+#include <haproxy/api.h>
+#include <haproxy/connection-t.h>
+#include <haproxy/listener-t.h>
+#include <haproxy/sock-t.h>
+
+extern struct xfer_sock_list *xfer_sock_list;
+
+int sock_create_server_socket(struct connection *conn);
+int sock_get_src(int fd, struct sockaddr *sa, socklen_t salen, int dir);
+int sock_get_dst(int fd, struct sockaddr *sa, socklen_t salen, int dir);
+int sock_get_old_sockets(const char *unixsocket);
+int sock_find_compatible_fd(const struct listener *l);
+
+#endif /* _HAPROXY_SOCK_H */
 
 /*
  * Local variables:

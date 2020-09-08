@@ -809,8 +809,8 @@ OBJS = src/mux_fcgi.o src/mux_h1.o src/mux_h2.o src/backend.o                 \
        src/task.o src/ring.o src/vars.o src/trace.o src/mux_pt.o              \
        src/xxhash.o src/mworker-prog.o src/h1_htx.o src/frontend.o            \
        src/extcheck.o src/channel.o src/action.o src/mailers.o                \
-       src/proto_sockpair.o src/ebmbtree.o src/thread.o                       \
-       src/lb_fwrr.o src/time.o src/regex.o src/lb_fwlc.o                     \
+       src/tcp_act.o src/proto_sockpair.o src/ebmbtree.o src/thread.o         \
+       src/tcp_sample.o src/lb_fwrr.o src/time.o src/regex.o src/lb_fwlc.o    \
        src/htx.o src/h2.o src/hpack-tbl.o src/lru.o src/wdt.o                 \
        src/lb_map.o src/eb32sctree.o src/ebistree.o src/h1.o                  \
        src/sha1.o src/http.o src/fd.o src/ev_select.o src/chunk.o             \
@@ -819,7 +819,8 @@ OBJS = src/mux_fcgi.o src/mux_h1.o src/mux_h2.o src/backend.o                 \
        src/ebsttree.o src/pipe.o src/hpack-enc.o src/fcgi.o                   \
        src/eb64tree.o src/dict.o src/shctx.o src/ebimtree.o                   \
        src/eb32tree.o src/ebtree.o src/dgram.o src/proto_udp.o                \
-       src/hpack-huff.o src/base64.o src/version.o
+       src/hpack-huff.o src/cfgparse-tcp.o src/base64.o src/version.o         \
+       src/cfgparse-unix.o src/sock.o src/sock_inet.o src/sock_unix.o
 
 ifneq ($(TRACE),)
 OBJS += src/calltrace.o

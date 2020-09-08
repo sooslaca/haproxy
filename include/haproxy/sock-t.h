@@ -1,10 +1,8 @@
 /*
- * include/proto/proto_udp.h
- * This file contains UDP socket protocol definitions.
+ * include/haproxy/sock-t.h
+ * This file contains type definitions for native (BSD-compatible) sockets.
  *
- * Copyright 2019 HAProxy Technologies, Frédéric Lécaille <flecaille@haproxy.com>
- *
- * Partial merge by Emeric Brun <ebrun@haproxy.com>
+ * Copyright (C) 2000-2020 Willy Tarreau - w@1wt.eu
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,17 +19,32 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#ifndef _PROTO_PROTO_UDP_H
-#define _PROTO_PROTO_UDP_H
+#ifndef _HAPROXY_SOCK_T_H
+#define _HAPROXY_SOCK_T_H
 
-int udp_bind_socket(int fd, int flags, struct sockaddr_storage *local, struct sockaddr_storage *remote);
-int udp_pause_listener(struct listener *l);
-int udp_get_src(int fd, struct sockaddr *sa, socklen_t salen, int dir);
-int udp6_get_src(int fd, struct sockaddr *sa, socklen_t salen, int dir);
-int udp_get_dst(int fd, struct sockaddr *sa, socklen_t salen, int dir);
-int udp6_get_dst(int fd, struct sockaddr *sa, socklen_t salen, int dir);
+#include <sys/socket.h>
+#include <sys/types.h>
 
-#endif /* _PROTO_PROTO_UDP_H */
+#include <haproxy/api-t.h>
+
+#define SOCK_XFER_OPT_FOREIGN 0x000000001
+#define SOCK_XFER_OPT_V6ONLY  0x000000002
+#define SOCK_XFER_OPT_DGRAM   0x000000004
+
+/* The list used to transfer sockets between old and new processes */
+struct xfer_sock_list {
+	int fd;
+	int options; /* socket options as SOCK_XFER_OPT_* */
+	char *iface;
+	char *namespace;
+	int if_namelen;
+	int ns_namelen;
+	struct xfer_sock_list *prev;
+	struct xfer_sock_list *next;
+	struct sockaddr_storage addr;
+};
+
+#endif /* _HAPROXY_SOCK_T_H */
 
 /*
  * Local variables:

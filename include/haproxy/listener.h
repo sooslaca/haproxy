@@ -83,13 +83,6 @@ void unbind_listener(struct listener *listener);
  */
 void unbind_listener_no_close(struct listener *listener);
 
-/* This function closes all listening sockets bound to the protocol <proto>,
- * and the listeners end in LI_ASSIGNED state if they were higher. It does not
- * detach them from the protocol. It always returns ERR_NONE.
- */
-int unbind_all_listeners(struct protocol *proto);
-
-
 /* creates one or multiple listeners for bind_conf <bc> on sockaddr <ss> on port
  * range <portl> to <porth>, and possibly attached to fd <fd> (or -1 for auto
  * allocation). The address family is taken from ss->ss_family. The number of
@@ -183,8 +176,6 @@ static inline const char *listener_state_str(const struct listener *l)
 		return "INVALID";
 	return states[st];
 }
-
-extern struct xfer_sock_list *xfer_sock_list;
 
 extern struct accept_queue_ring accept_queue_rings[MAX_THREADS] __attribute__((aligned(64)));
 
