@@ -28,6 +28,9 @@ jobs:
     - name: run h2spec
       run: |
         ./h2spec -Svtk -h 127.0.0.1 -p 8443
+    - name: stop haproxy
+      run: |
+        killall haproxy
     - name: check for asan log
       run: |
         if ls asan.log* 1> /dev/null 2>&1; then
