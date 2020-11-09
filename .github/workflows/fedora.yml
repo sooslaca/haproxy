@@ -1,0 +1,24 @@
+name: Fedora Rawhide
+
+on: [push]
+
+jobs:
+  fedora_rawhide:
+      name: gcc
+      runs-on: ubuntu-latest
+      container:
+        image: fedora:rawhide
+        env:
+           TMPDIR: /tmp
+      steps:
+        - uses: actions/checkout@master
+        - name: Install prerequisites
+          run: |
+            dnf --nogpgcheck -y groupinstall "Development Tools"
+            dnf --nogpgcheck -y install openssl-devel lua-devel pcre-devel zlib-devel systemd-devel socat make clang
+            git clone https://github.com/VTest/VTest.git ../vtest
+            make -C ../vtest FLAGS="-O2 -s -Wall"
+        - name: Build
+          run: |
+            make -j3 CC=gcc ERR=1 TARGET=linux-glibc USE_OPENSSL=1 USE_ZLIB=1 USE_PCRE=1 USE_PCRE_JIT=1 USE_LUA=1 USE_SYSTEMD=1
+            make reg-tests VTEST_PROGRAM=../vtest/vtest || (for folder in /tmp/*regtest*/vtc.*; do cat $folder/{INFO,LOG}; done; exit 1)
