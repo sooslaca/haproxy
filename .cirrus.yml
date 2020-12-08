@@ -18,6 +18,8 @@ centos_6_task:
     image: centos:centos6
   only_if: $CIRRUS_BRANCH =~ 'master|next'
   script:
+    - echo -e "[vault]\nname=vault\nbaseurl=https://vault.centos.org/6.10/os/x86_64/\nenabled=1\ngpgcheck=0\npriority=1" >> /etc/yum.repos.d/vault.repo
+    - rm /etc/yum.repos.d/CentOS-Base.repo
     - yum install -q -y gcc git openssl-devel pcre-devel epel-release socat
     - yum install -q -y python34
     - git clone https://github.com/VTest/VTest.git ../vtest
