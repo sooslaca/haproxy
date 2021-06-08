@@ -6,6 +6,7 @@
 # as published by the Free Software Foundation; either version
 # 2 of the License, or (at your option) any later version.
 
+import hashlib
 import json
 import sys
 
@@ -33,6 +34,8 @@ def clean_ssl(ssl):
 def clean_compression(compression):
     return compression.replace("USE_", "").lower()
 
+def get_hash(s):
+    return hashlib.sha256(s.encode('utf-8')).hexdigest()
 
 def get_asan_flags(cc):
     if cc == "clang":
@@ -53,9 +56,11 @@ matrix = []
 os = "ubuntu-latest"
 TARGET = "linux-glibc"
 for CC in ["gcc", "clang"]:
+    name = "{}, {}, no features".format(clean_os(os), CC)
     matrix.append(
         {
-            "name": "{}, {}, no features".format(clean_os(os), CC),
+            "name": name,
+            "name_hash": get_hash(name),
             "os": os,
             "TARGET": TARGET,
             "CC": CC,
@@ -63,9 +68,11 @@ for CC in ["gcc", "clang"]:
         }
     )
 
+    name = "{}, {}, all features".format(clean_os(os), CC)
     matrix.append(
         {
-            "name": "{}, {}, all features".format(clean_os(os), CC),
+            "name": name,
+            "name_hash": get_hash(name),
             "os": os,
             "TARGET": TARGET,
             "CC": CC,
@@ -93,11 +100,11 @@ for CC in ["gcc", "clang"]:
     )
 
     for compression in ["USE_SLZ=1", "USE_ZLIB=1"]:
+        name = "{}, {}, gz={}".format(clean_os(os), CC, clean_compression(compression))
         matrix.append(
             {
-                "name": "{}, {}, gz={}".format(
-                    clean_os(os), CC, clean_compression(compression)
-                ),
+                "name": name,
+                "name_hash": get_hash(name),
                 "os": os,
                 "TARGET": TARGET,
                 "CC": CC,
@@ -121,9 +128,11 @@ for CC in ["gcc", "clang"]:
         if ssl != "stock":
             flags.append("SSL_LIB=${HOME}/opt/lib")
             flags.append("SSL_INC=${HOME}/opt/include")
+        name =  "{}, {}, ssl={}".format(clean_os(os), CC, clean_ssl(ssl))
         matrix.append(
             {
-                "name": "{}, {}, ssl={}".format(clean_os(os), CC, clean_ssl(ssl)),
+                "name": name,
+                "name_hash": get_hash(name),
                 "os": os,
                 "TARGET": TARGET,
                 "CC": CC,
@@ -137,9 +146,11 @@ for CC in ["gcc", "clang"]:
 os = "ubuntu-latest"
 CC = "clang"
 TARGET = "linux-glibc"
+name = "{}, {}, ASAN, all features".format(clean_os(os), CC)
 matrix.append(
     {
-        "name": "{}, {}, ASAN, all features".format(clean_os(os), CC),
+        "name": name,
+        "name_hash": get_hash(name),
         "os": os,
         "TARGET": TARGET,
         "CC": CC,
@@ -172,9 +183,11 @@ matrix.append(
 os = "macos-latest"
 TARGET = "osx"
 for CC in ["clang"]:
+    name = "{}, {}, no features".format(clean_os(os), CC)
     matrix.append(
         {
-            "name": "{}, {}, no features".format(clean_os(os), CC),
+            "name": name,
+            "name_hash": get_hash(name),
             "os": os,
             "TARGET": TARGET,
             "CC": CC,
