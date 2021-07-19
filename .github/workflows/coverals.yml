@@ -24,5 +24,7 @@ jobs:
       run: |
         make reg-tests VTEST_PROGRAM=../vtest/vtest REGTESTS_TYPES=default,bug,devel
     - name: submit coverals report
+      env:
+        COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
       run: |
         coveralls --exclude lib --exclude tests --gcov-options '\-lp'
