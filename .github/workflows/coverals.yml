@@ -1,0 +1,28 @@
+
+name: coverals
+
+on:
+  push:
+
+jobs:
+  test:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+    - name: prepare VTest
+      run: |
+        scripts/build-vtest.sh
+    - name: install coverals
+      run: |
+        pip install --user cpp-coveralls
+    - name: build haproxy
+      run: |
+        make DEBUG_CFLAGS="--coverage" LDFLAGS="--coverage" -j3 CC=gcc ERR=1 TARGET=linux-glibc USE_OPENSSL=1
+    - name: run reg-tests
+      run: |
+        make reg-tests VTEST_PROGRAM=../vtest/vtest REGTESTS_TYPES=default,bug,devel
+    - name: submit coverals report
+      run: |
+        coveralls --exclude lib --exclude tests --gcov-options '\-lp'
