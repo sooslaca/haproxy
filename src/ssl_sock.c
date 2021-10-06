@@ -606,7 +606,7 @@ static forceinline void ssl_sock_dump_errors(struct connection *conn)
 				return;
 			fprintf(stderr, "fd[%#x] OpenSSL error[0x%lx] %s: %s\n",
 			        conn->handle.fd, ret,
-			        ERR_func_error_string(ret), ERR_reason_error_string(ret));
+			        HA_ERR_func_error_string(ret), ERR_reason_error_string(ret));
 		}
 	}
 }

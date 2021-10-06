@@ -41,6 +41,13 @@
 #define OpenSSL_version_num     SSLeay
 #endif
 
+/* ERR_func_error_string is deprecated in OpenSSL-3.0.0 */
+#if (OPENSSL_VERSION_NUMBER >= 0x30000000L)
+#define HA_ERR_func_error_string(ret) "OPENSSL_internal"
+#else
+#define HA_ERR_func_error_string(ret) ERR_func_error_string(ret)
+#endif
+
 #if (defined(LIBRESSL_VERSION_NUMBER) && LIBRESSL_VERSION_NUMBER >= 0x2070100fL) || defined(OPENSSL_IS_BORINGSSL) || (!defined(LIBRESSL_VERSION_NUMBER) && (OPENSSL_VERSION_NUMBER >= 0x10100000L))
 #define HAVE_SSL_EXTRACT_RANDOM
 #endif
