@@ -8,10 +8,6 @@ name: DevSkim
 on:
   push:
     branches: [ master ]
-  pull_request:
-    branches: [ master ]
-  schedule:
-    - cron: '22 20 * * 1'
 
 jobs:
   lint:
@@ -32,3 +28,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v1
         with:
           sarif_file: devskim-results.sarif
+
+      - name: Show devskim-results.sarif
+        run: cat devskim-results.sarif
+
