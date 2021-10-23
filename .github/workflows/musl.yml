@@ -15,11 +15,11 @@ jobs:
       steps:
       - uses: actions/checkout@master
       - name: Install dependencies
-        run: apk add gcc make tar git python3 libc-dev linux-headers pcre-dev pcre2-dev openssl-dev lua5.3-dev grep socat curl
+        run: apk add gcc clang make tar git python3 libc-dev linux-headers pcre-dev pcre2-dev openssl-dev lua5.3-dev grep socat curl
       - name: Install VTest
         run: scripts/build-vtest.sh
       - name: Build
-        run: make -j$(nproc) CC=cc V=1 TARGET=linux-musl USE_LUA=1 LUA_INC=/usr/include/lua5.3 LUA_LIB=/usr/lib/lua5.3 USE_OPENSSL=1 USE_PCRE2=1 USE_PCRE2_JIT=1 USE_PROMEX=1
+        run: make -j$(nproc) CC=clang V=1 TARGET=linux-musl CFLAGS_DEBUG="-ggdb -fsanitize=address" LDFLAGS="-fsanitize=address" USE_LUA=1 LUA_INC=/usr/include/lua5.3 LUA_LIB=/usr/lib/lua5.3 USE_OPENSSL=1 USE_PCRE2=1 USE_PCRE2_JIT=1 USE_PROMEX=1
       - name: Show version
         run: ./haproxy -vv
       - name: Show linked libraries
