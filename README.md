@@ -20,3 +20,9 @@ The more detailed documentation is located into the doc/ directory :
   - doc/peers.txt for the peers protocol reference
   - doc/coding-style.txt for how to adopt HAProxy's coding style
   - doc/internals for developer-specific documentation (not all up to date)
+
+||Badges|
+|---|---|
+|Coverity Scan|[![Coverity Scan build status](https://scan.coverity.com/projects/340/badge.svg)](https://scan.coverity.com/projects/haproxy)|
+|Travis-CI|[![Travis-CI build status](https://api.travis-ci.com/haproxy/haproxy.svg?branch=master)](https://app.travis-ci.com/github/haproxy/haproxy)|
+|h2spec|[![h2spec status](https://github.com/haproxy/haproxy/actions/workflows/compliance.yml/badge.svg)](https://github.com/haproxy/haproxy/actions/workflows/compliance.yml)|
