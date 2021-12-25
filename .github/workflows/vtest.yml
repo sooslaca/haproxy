@@ -114,7 +114,7 @@ jobs:
         ulimit -n 5000
         make reg-tests VTEST_PROGRAM=../vtest/vtest REGTESTS_TYPES=default,bug,devel
     - name: Show results
-      if: ${{ failure() }}
+      if: if: ${{ !cancelled() && failure() }}
       run: |
         for folder in ${TMPDIR}/haregtests-*/vtc.*; do
           printf "::group::"
