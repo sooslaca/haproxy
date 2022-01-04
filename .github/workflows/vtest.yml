@@ -83,13 +83,13 @@ jobs:
         cd opentracing-cpp-${OT_CPP_VERSION}
         mkdir build
         cd build
-        cmake -DCMAKE_INSTALL_PREFIX=${HOME}/opt -DBUILD_STATIC_LIBS=OFF -DBUILD_MOCKTRACER=OFF -DBUILD_TESTING=OFF ..
+        cmake -DCMAKE_INSTALL_PREFIX=${HOME}/opt_ot -DBUILD_STATIC_LIBS=OFF -DBUILD_MOCKTRACER=OFF -DBUILD_TESTING=OFF ..
         make -j$(nproc)
         make install
         git clone https://github.com/haproxytech/opentracing-c-wrapper.git
         cd opentracing-c-wrapper
         ./scripts/bootstrap
-        ./configure --prefix=${HOME}/opt --with-opentracing=${HOME}/opt
+        ./configure --prefix=${HOME}/opt_ot --with-opentracing=${HOME}/opt_ot
         make -j$(nproc)
         make install
     - name: Build WURFL
