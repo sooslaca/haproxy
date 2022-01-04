@@ -63,11 +63,12 @@ jobs:
         brew install socat
         brew install lua
     - name: Cache dependencies
+      if: ${{ contains(matrix.FLAGS, 'USE_OT=1') }}
       id: cache_ot
       uses: actions/cache@v2
       with:
         path: '~/opt_ot/'
-        key: ${{ matrix.CC }}-${{ env.OT_CPP_VERSION }}
+        key: ot-${{ matrix.CC }}-${{ env.OT_CPP_VERSION }}
     - name: Install VTest
       run: |
         scripts/build-vtest.sh
