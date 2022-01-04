@@ -37,6 +37,7 @@ jobs:
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
       fail-fast: false
     env:
+      OT_CPP_VERSION: 1.5.0
       # Configure a short TMPDIR to prevent failures due to long unix socket
       # paths.
       TMPDIR: /tmp
