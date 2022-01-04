@@ -61,6 +61,12 @@ jobs:
       run: |
         brew install socat
         brew install lua
+    - name: Cache dependencies
+      id: cache_ot
+      uses: actions/cache@v2
+      with:
+        path: '~/opt_ot/'
+        key: ${{ matrix.CC }}-${{ env.OT_CPP_VERSION }}
     - name: Install VTest
       run: |
         scripts/build-vtest.sh
@@ -68,8 +74,22 @@ jobs:
       if: ${{ matrix.ssl && matrix.ssl != 'stock' }}
       run: env ${{ matrix.ssl }} scripts/build-ssl.sh
     - name: Install OpenTracing libs
-      if: ${{ contains(matrix.FLAGS, 'USE_OT=1') }}
-      run: scripts/build-ot.sh
+      if: ${{ contains(matrix.FLAGS, 'USE_OT=1') && steps.cache_ot.outputs.cache-hit != 'true' }}
+      run: |
+        wget -P download-cache/ "https://github.com/opentracing/opentracing-cpp/archive/v${OT_CPP_VERSION}.tar.gz"
+        tar xf download-cache/v${OT_CPP_VERSION}.tar.gz
+        cd opentracing-cpp-${OT_CPP_VERSION}
+        mkdir build
+        cd build
+        cmake -DCMAKE_INSTALL_PREFIX=${HOME}/opt -DBUILD_STATIC_LIBS=OFF -DBUILD_MOCKTRACER=OFF -DBUILD_TESTING=OFF ..
+        make -j$(nproc)
+        make install
+        git clone https://github.com/haproxytech/opentracing-c-wrapper.git
+        cd opentracing-c-wrapper
+        ./scripts/bootstrap
+        ./configure --prefix=${HOME}/opt --with-opentracing=${HOME}/opt
+        make -j$(nproc)
+        make install
     - name: Build WURFL
       if: ${{ contains(matrix.FLAGS, 'USE_WURFL=1') }}
       run: make -C addons/wurfl/dummy
