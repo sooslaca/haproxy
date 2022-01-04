@@ -1,0 +1,7 @@
+matrix:
+- name: Source
+  aspell:
+    lang: en
+    d: en_US
+  sources:
+  - src/**/*.*
